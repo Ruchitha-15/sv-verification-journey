@@ -52,6 +52,47 @@ module top_module(
     assign out_xor=in[3]^in[2]^in[1]^in[0];
 endmodule
 
+CONCATINATION
+module top_module (
+    input [4:0] a, b, c, d, e, f,
+    output [7:0] w, x, y, z );//
+
+    assign {w,x,y,z} = {a,b,c,d,e,f,1'b0001,1'b0001};
+
+endmodule
+
 REVERSAL
-REPLICATION-1
+module top_module( 
+    input [7:0] in,
+    output [7:0] out
+);
+assign out = {in[0], in[1], in[2], in[3],
+                  in[4], in[5], in[6], in[7]};
+endmodule
+
+REPLICATION-1-Build a circuit that sign-extends an 8-bit number to 32 bits. This requires a concatenation of 24 copies of the sign bit (i.e., replicate bit[7] 24 times) followed by the 8-bit number itself.
+module top_module (
+    input [7:0] in,
+    output [31:0] out );//
+
+    assign out = { {24{in[7]}}, in };
+endmodule
 REPLICATION-2
+Given five 1-bit signals (a, b, c, d, and e), compute all 25 pairwise one-bit comparisons in the 25-bit output vector. The output should be 1 if the two bits being compared are equal.
+
+out[24] = ~a ^ a;   // a == a, so out[24] is always 1.
+out[23] = ~a ^ b;
+out[22] = ~a ^ c;
+...
+out[ 1] = ~e ^ d;
+out[ 0] = ~e ^ e;
+module top_module (
+    input a, b, c, d, e,
+    output [24:0] out );//
+
+    // The output is XNOR of two vectors created by 
+    // concatenating and replicating the five inputs.
+    assign out = ~{{5{a}},{5{b}},{5{c}},{5{d}},{5{e}}} ^ {5{a,b,c,d,e}};
+
+endmodule
+
