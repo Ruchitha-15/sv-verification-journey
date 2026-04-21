@@ -21,7 +21,8 @@ module tb();
   );
 
   initial begin
-
+$dumpfile("ripple_adder.vcd");
+$dumpvars(0, tb);
     for (i = 0; i < 16; i = i + 1) begin
       for (j = 0; j < 16; j = j + 1) begin
         for (k = 0; k < 2; k = k + 1) begin
