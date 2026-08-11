@@ -10,11 +10,9 @@ Built as part of a focused FPGA Design Verification training program.
 
 | Folder | Contents | Status |
 |--------|----------|--------|
-| week01-| week01-verilog-audit | Verilog fundamentals, FSM, FIFO, self-checking TBs | ✅ Complete |
-| week02-fsm | Coming soon | ⏳ |
-| week03-clocking | Coming soon | ⏳ |
-| week04-fifo | Coming soon | ⏳ |
-
+| `week01-verilog-audit` | Verilog fundamentals | ✅ Complete |
+| `week02-systemverilog` | SystemVerilog + manual environment | ✅ Complete |
+| `week03-uvm` | UVM components | 🔄 In progress |
 ## Tools used
 - EDA Playground (Icarus Verilog + GTKWave)
 - Namaste FPGA courseware
