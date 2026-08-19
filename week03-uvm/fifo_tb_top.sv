@@ -101,44 +101,77 @@ class fifo_driver extends uvm_driver #(fifo_seq_item);
 endclass
 //MONITOR//
 class fifo_monitor extends uvm_monitor;
-
-  `uvm_component_utils(fifo_monitor)
+    `uvm_component_utils(fifo_monitor)
 
     virtual fifo_if vif;
-  uvm_analysis_port #(fifo_seq_item) ap;
+    uvm_analysis_port #(fifo_seq_item) ap;
+    fifo_seq_item tr;
+
+    // covergroup
+    covergroup fifo_cg;
+        cp_data: coverpoint tr.data {
+            bins low  = {[8'h00 : 8'h3F]};
+            bins mid  = {[8'h40 : 8'hBF]};
+            bins high = {[8'hC0 : 8'hFF]};
+        }
+        cp_wr_en: coverpoint tr.wr_en {
+            bins write = {1};
+            bins idle  = {0};
+        }
+        cp_rd_en: coverpoint tr.rd_en {
+            bins read  = {1};
+            bins idle  = {0};
+        }
+        cx_rw: cross cp_wr_en, cp_rd_en;
+    endgroup
 
     function new(string name, uvm_component parent);
         super.new(name, parent);
+        fifo_cg = new();
     endfunction
 
     function void build_phase(uvm_phase phase);
         super.build_phase(phase);
-        ap = new("ap", this);  // create analysis port
+        ap = new("ap", this);
         if(!uvm_config_db #(virtual fifo_if)::get(
             this, "", "vif", vif))
             `uvm_fatal("NO_VIF", "Virtual interface not found")
     endfunction
 
     task run_phase(uvm_phase phase);
-    fifo_seq_item tr;
     forever begin
         @(posedge vif.clk);
         #1;
+        // sample writes
+        if(vif.wr_en && !vif.full) begin
+            tr       = new("wr_tr");
+            tr.data  = vif.din;
+            tr.wr_en = vif.wr_en;
+            tr.rd_en = vif.rd_en;
+            fifo_cg.sample();
+        end
+        // sample reads
         if(vif.rd_en && !vif.empty) begin
-            // rd_en is high NOW — wait one cycle for dout to settle
-            @(posedge vif.clk);
-            #1;
-            tr      = new("mon_tr");
-            tr.data = vif.dout;
-            tr.wr_en = 0;
-            tr.rd_en = 1;
+            tr       = new("mon_tr");
+            tr.data  = vif.dout;
+            tr.wr_en = vif.wr_en;
+            tr.rd_en = vif.rd_en;
+            fifo_cg.sample();
             `uvm_info("MONITOR",
-                $sformatf("saw dout=%0h", tr.data), UVM_MEDIUM)
+                $sformatf("saw dout=%0h", tr.data),
+                UVM_MEDIUM)
             ap.write(tr);
         end
     end
 endtask
-
+function void report_phase(uvm_phase phase);
+    super.report_phase(phase);
+    $display("FUNCTIONAL COVERAGE = %0.2f%%", 
+              fifo_cg.get_coverage());
+    `uvm_info("COVERAGE",
+        $sformatf("Functional coverage = %0.2f%%",
+                  fifo_cg.get_coverage()), UVM_LOW)
+endfunction
 endclass
 
 //SCOREBOARD//
@@ -188,12 +221,12 @@ class fifo_scoreboard extends uvm_scoreboard;
         end
     endfunction
 
-    function void report_phase(uvm_phase phase);
-        `uvm_info("SCOREBOARD",
-            $sformatf("RESULTS: PASS=%0d FAIL=%0d",
-            pass_count, fail_count), UVM_NONE)
-    endfunction
-
+    
+function void report_phase(uvm_phase phase);
+    `uvm_info("SCOREBOARD",
+        $sformatf("RESULTS: PASS=%0d FAIL=%0d",
+        pass_count, fail_count), UVM_NONE)
+endfunction
 endclass
 //SEQUENCER//
 class fifo_sequence extends uvm_sequence #(fifo_seq_item);
@@ -207,31 +240,53 @@ class fifo_sequence extends uvm_sequence #(fifo_seq_item);
     endfunction
 
     task body();
-        fifo_seq_item tr;
+    fifo_seq_item tr;
 
-        // write 5 items
-        repeat(5) begin
-            tr = fifo_seq_item::type_id::create("tr");
-            start_item(tr);
-            assert(tr.randomize() with {
-                wr_en == 1; rd_en == 0;});
-            finish_item(tr);
-            // push expected data to scoreboard
-            scb.exp_queue.push_back(tr);
-            `uvm_info("SEQ",
-                $sformatf("WROTE: data=%0h", tr.data),
-                UVM_MEDIUM)
-        end
+    // write 2 items — low range
+    repeat(2) begin
+        tr = fifo_seq_item::type_id::create("tr");
+        start_item(tr);
+        assert(tr.randomize() with {
+            wr_en == 1; rd_en == 0;
+            data inside {[8'h00:8'h3F]};});
+        finish_item(tr);
+        scb.exp_queue.push_back(tr);
+        `uvm_info("SEQ",$sformatf("WROTE: data=%0h",tr.data),UVM_MEDIUM)
+    end
 
-        // read 5 items
-        repeat(5) begin
-            tr = fifo_seq_item::type_id::create("tr");
-            start_item(tr);
-            assert(tr.randomize() with {
-                wr_en == 0; rd_en == 1;});
-            finish_item(tr);
-        end
-    endtask
+    // write 3 items — mid range
+    repeat(3) begin
+        tr = fifo_seq_item::type_id::create("tr");
+        start_item(tr);
+        assert(tr.randomize() with {
+            wr_en == 1; rd_en == 0;
+            data inside {[8'h40:8'hBF]};});
+        finish_item(tr);
+        scb.exp_queue.push_back(tr);
+        `uvm_info("SEQ",$sformatf("WROTE: data=%0h",tr.data),UVM_MEDIUM)
+    end
+
+    // write 2 items — high range
+    repeat(2) begin
+        tr = fifo_seq_item::type_id::create("tr");
+        start_item(tr);
+        assert(tr.randomize() with {
+            wr_en == 1; rd_en == 0;
+            data inside {[8'hC0:8'hFF]};});
+        finish_item(tr);
+        scb.exp_queue.push_back(tr);
+        `uvm_info("SEQ",$sformatf("WROTE: data=%0h",tr.data),UVM_MEDIUM)
+    end
+
+    // read all 7 items back
+    repeat(7) begin
+        tr = fifo_seq_item::type_id::create("tr");
+        start_item(tr);
+        assert(tr.randomize() with {
+            wr_en == 0; rd_en == 1;});
+        finish_item(tr);
+    end
+endtask
 endclass
 //AGENT//
 class fifo_agent extends uvm_agent;
@@ -281,8 +336,6 @@ class fifo_env extends uvm_env;
     endfunction
 
 endclass
-
-
 //TESTBENCH//
 `timescale 1ns/1ps
 import uvm_pkg::*;
@@ -315,7 +368,7 @@ class fifo_test extends uvm_test;
     seq     = fifo_sequence::type_id::create("seq");
     seq.scb = env.scb;
     seq.start(env.agent.seqr);
-
+repeat(30) @(posedge env.agent.drv.vif.clk);
     phase.drop_objection(this);
 endtask
 endclass
