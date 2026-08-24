@@ -12,7 +12,7 @@ Built as part of a focused FPGA Design Verification training program.
 |--------|----------|--------|
 | `week01-verilog-audit` | Verilog fundamentals | ✅ Complete |
 | `week02-systemverilog` | SystemVerilog + manual environment | ✅ Complete |
-| `week03-uvm` | UVM components | 🔄 In progress |
+| `week03-uvm` | UVM components | ✅ Complete |
 ## Tools used
 - EDA Playground (Icarus Verilog + GTKWave)
 - Namaste FPGA courseware
