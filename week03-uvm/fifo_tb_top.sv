@@ -370,5 +370,79 @@ class fifo_env extends uvm_env;
     function void connect_phase(uvm_phase phase);
         agent.mon.ap.connect(scb.mon_imp);
     endfunction
+// TESTBENCH
+`timescale 1ns/1ps
+import uvm_pkg::*;
+`include "uvm_macros.svh"
 
+class fifo_test extends uvm_test;
+    `uvm_component_utils(fifo_test)
+    fifo_env env;
+
+    function new(string name, uvm_component parent);
+        super.new(name, parent);
+    endfunction
+
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        env = fifo_env::type_id::create("env", this);
+    endfunction
+
+   task run_phase(uvm_phase phase);
+    fifo_sequence seq;
+    phase.raise_objection(this);
+
+    // reset DUT at start of run_phase
+    env.agent.drv.vif.rst = 1;
+    repeat(4) @(posedge env.agent.drv.vif.clk);
+    env.agent.drv.vif.rst = 0;
+    repeat(2) @(posedge env.agent.drv.vif.clk);
+
+    // now start sequence
+    seq     = fifo_sequence::type_id::create("seq");
+    seq.scb = env.scb;
+    seq.start(env.agent.seqr);
+repeat(30) @(posedge env.agent.drv.vif.clk);
+    phase.drop_objection(this);
+endtask
 endclass
+
+module tb_top;
+    logic clk;
+    fifo_if dut_if(.clk(clk));
+
+    sync_fifo dut (
+        .clk  (dut_if.clk),
+        .rst  (dut_if.rst),
+        .wr_en(dut_if.wr_en),
+        .rd_en(dut_if.rd_en),
+        .din  (dut_if.din),
+        .dout (dut_if.dout),
+        .full (dut_if.full),
+        .empty(dut_if.empty)
+    );
+fifo_assertions fifo_sva (
+    .clk    (dut_if.clk),
+    .rst    (dut_if.rst),
+    .wr_en  (dut_if.wr_en),
+    .rd_en  (dut_if.rd_en),
+    .full   (dut_if.full),
+    .empty  (dut_if.empty),
+    .wr_ptr (dut.wr_ptr),
+    .rd_ptr (dut.rd_ptr)
+);
+    always #5 clk = ~clk;
+
+    initial begin
+    clk = 0;
+    dut_if.rst  = 1;
+    dut_if.wr_en = 0;
+    dut_if.rd_en = 0;
+    dut_if.din   = 0;
+
+    uvm_config_db #(virtual fifo_if)::set(
+        null, "uvm_test_top.*", "vif", dut_if);
+
+    run_test("fifo_test");  // called at time 0 — no delays before this
+end
+endmodule
