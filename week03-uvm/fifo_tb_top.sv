@@ -41,7 +41,43 @@ module sync_fifo (
         end
     end
 endmodule
+// Assertions
+module fifo_assertions(
+    input logic clk,
+    input logic rst,
+    input logic wr_en,
+    input logic rd_en,
+    input logic full,
+    input logic empty,
+    input logic [2:0] wr_ptr,
+    input logic [2:0] rd_ptr
+);
+    property full_check;
+        @(posedge clk) disable iff(rst)
+        full |-> (wr_ptr + 1 == rd_ptr);
+    endproperty
+    assert property(full_check)
+        else $error("FULL flag incorrect");
 
+    property empty_check;
+        @(posedge clk) disable iff(rst)
+        empty |-> (wr_ptr == rd_ptr);
+    endproperty
+    assert property(empty_check)
+        else $error("EMPTY flag incorrect");
+
+   property write_ptr_check;
+    @(posedge clk) disable iff(rst)
+    (wr_en && !full) |=> ##1 (wr_ptr == $past(wr_ptr,2) + 1);
+endproperty
+
+property read_ptr_check;
+    @(posedge clk) disable iff(rst)
+    (rd_en && !empty) |=> ##1 (rd_ptr == $past(rd_ptr,2) + 1);
+endproperty
+    assert property(read_ptr_check)
+        else $error("Read pointer not incrementing");
+endmodule
 // UVM imports
 import uvm_pkg::*;
 `include "uvm_macros.svh" 
@@ -336,70 +372,3 @@ class fifo_env extends uvm_env;
     endfunction
 
 endclass
-//TESTBENCH//
-`timescale 1ns/1ps
-import uvm_pkg::*;
-`include "uvm_macros.svh"
-
-class fifo_test extends uvm_test;
-    `uvm_component_utils(fifo_test)
-    fifo_env env;
-
-    function new(string name, uvm_component parent);
-        super.new(name, parent);
-    endfunction
-
-    function void build_phase(uvm_phase phase);
-        super.build_phase(phase);
-        env = fifo_env::type_id::create("env", this);
-    endfunction
-
-   task run_phase(uvm_phase phase);
-    fifo_sequence seq;
-    phase.raise_objection(this);
-
-    // reset DUT at start of run_phase
-    env.agent.drv.vif.rst = 1;
-    repeat(4) @(posedge env.agent.drv.vif.clk);
-    env.agent.drv.vif.rst = 0;
-    repeat(2) @(posedge env.agent.drv.vif.clk);
-
-    // now start sequence
-    seq     = fifo_sequence::type_id::create("seq");
-    seq.scb = env.scb;
-    seq.start(env.agent.seqr);
-repeat(30) @(posedge env.agent.drv.vif.clk);
-    phase.drop_objection(this);
-endtask
-endclass
-
-module tb_top;
-    logic clk;
-    fifo_if dut_if(.clk(clk));
-
-    sync_fifo dut (
-        .clk  (dut_if.clk),
-        .rst  (dut_if.rst),
-        .wr_en(dut_if.wr_en),
-        .rd_en(dut_if.rd_en),
-        .din  (dut_if.din),
-        .dout (dut_if.dout),
-        .full (dut_if.full),
-        .empty(dut_if.empty)
-    );
-
-    always #5 clk = ~clk;
-
-    initial begin
-    clk = 0;
-    dut_if.rst  = 1;
-    dut_if.wr_en = 0;
-    dut_if.rd_en = 0;
-    dut_if.din   = 0;
-
-    uvm_config_db #(virtual fifo_if)::set(
-        null, "uvm_test_top.*", "vif", dut_if);
-
-    run_test("fifo_test");  // called at time 0 — no delays before this
-end
-endmodule
